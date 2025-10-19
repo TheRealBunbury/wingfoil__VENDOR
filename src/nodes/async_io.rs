@@ -55,19 +55,19 @@ where
     T: Element + Send,
     FUT: Future<Output = ()> + Send + 'static,
 {
-    fn cycle(&mut self, state: &mut GraphState) -> bool {
+    fn cycle(&mut self, state: &mut GraphState) -> anyhow::Result<bool> {
         let res = self.sender.send(state, self.source.peek_value());
         if  res.is_err() {
             state.terminate(res.map_err(|e| anyhow!(e)));
         }
-        true
+        Ok(true)
     }
 
     fn upstreams(&self) -> UpStreams {
         UpStreams::new(vec![self.source.clone().as_node()], vec![])
     }
 
-    fn setup(&mut self, state: &mut GraphState) {
+    fn setup(&mut self, state: &mut GraphState) -> anyhow::Result<()> {
         let run_mode = state.run_mode();
         let run_for = state.run_for();
         let rx = self.rx.take().unwrap();
@@ -82,18 +82,21 @@ where
         };
         let handle = state.tokio_runtime().spawn(f);
         self.handle = Some(handle);
+        Ok(())
     }
 
-    fn stop(&mut self, state : &mut GraphState) {
+    fn stop(&mut self, state : &mut GraphState) -> anyhow::Result<()> {
         let res = self.sender.close();
         if res.is_err() {
             state.terminate(res.map_err(|e| anyhow!(e)));
         }
+        Ok(())
     }
 
-    fn teardown(&mut self, state: &mut GraphState) {
+    fn teardown(&mut self, state: &mut GraphState) -> anyhow::Result<()> {
         let handle = self.handle.take().unwrap();
         state.tokio_runtime().block_on(handle).unwrap();
+        Ok(())
     }
 }
 
@@ -139,7 +142,7 @@ where
     FUT: Future<Output = S> + Send + 'static,
     FUNC: FnOnce() -> FUT + Send + 'static,
 {
-    fn cycle(&mut self, state: &mut GraphState) -> bool {
+    fn cycle(&mut self, state: &mut GraphState) -> anyhow::Result<bool> {
         self.receiver_stream.cycle(state)
     }
 
@@ -147,7 +150,7 @@ where
         UpStreams::none()
     }
 
-    fn setup(&mut self, state: &mut GraphState) {
+    fn setup(&mut self, state: &mut GraphState) -> anyhow::Result<()> {
         let run_mode = state.run_mode();
         let run_for = state.run_for();
         let mut sender = self.sender.take().unwrap();
@@ -170,13 +173,15 @@ where
         };
         let handle = state.tokio_runtime().spawn(fut);
         self.handle = Some(handle);
-        self.receiver_stream.setup(state);
+        self.receiver_stream.setup(state)?;
+        Ok(())
     }
 
-    fn teardown(&mut self, state: &mut GraphState) {
-        self.receiver_stream.teardown(state);
+    fn teardown(&mut self, state: &mut GraphState) -> anyhow::Result<()> {
+        self.receiver_stream.teardown(state)?;
         let handle = self.handle.take().unwrap();
         state.tokio_runtime().block_on(handle).unwrap();
+        Ok(())
     }
 }
 

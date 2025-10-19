@@ -58,11 +58,11 @@ where
         UpStreams::new(vec![], vec![])
     }
 
-    fn cycle(&mut self, graph_state: &mut GraphState) -> bool {
+    fn cycle(&mut self, graph_state: &mut GraphState) -> anyhow::Result<bool> {
         self.receiver_stream.get_mut().unwrap().cycle(graph_state)
     }
 
-    fn setup(&mut self, graph_state: &mut GraphState) {
+    fn setup(&mut self, graph_state: &mut GraphState) -> anyhow::Result<()> {
         let state = mem::take(&mut self.state);
         match state {
             GraphProducerStreamState::Func(func) => {
@@ -73,7 +73,7 @@ where
                 };
                 let (sender, receiver) = channel_pair(notifier);
                 let mut receiver_stream = ReceiverStream::new(receiver, None, None);
-                receiver_stream.setup(graph_state);
+                receiver_stream.setup(graph_state)?;
                 self.receiver_stream.set(receiver_stream).unwrap();
                 let tokio_runtime = graph_state.tokio_runtime();
                 let start_time = graph_state.start_time();
@@ -89,13 +89,14 @@ where
             }
             _ => panic!(),
         }
+        Ok(())
     }
 
-    fn teardown(&mut self, graph_state: &mut GraphState) {
+    fn teardown(&mut self, graph_state: &mut GraphState) -> anyhow::Result<()> {
         self.receiver_stream
             .get_mut()
             .unwrap()
-            .teardown(graph_state);
+            .teardown(graph_state)?;
         let state = mem::take(&mut self.state);
         match state {
             GraphProducerStreamState::Handle(handle) => {
@@ -104,6 +105,7 @@ where
             }
             _ => panic!(),
         }
+        Ok(())
     }
 }
 
@@ -184,7 +186,7 @@ where
         UpStreams::new(vec![self.source.clone()], vec![])
     }
 
-    fn cycle(&mut self, graph_state: &mut GraphState) -> bool {
+    fn cycle(&mut self, graph_state: &mut GraphState) -> anyhow::Result<bool> {
         if graph_state.ticked(self.source.clone()) {
             let res = self.sender
                 .get_mut()
@@ -198,7 +200,7 @@ where
         self.receiver_stream.cycle(graph_state)
     }
 
-    fn setup(&mut self, graph_state: &mut GraphState) {
+    fn setup(&mut self, graph_state: &mut GraphState) -> anyhow::Result<()> {
         let state = mem::take(&mut self.state);
         match state {
             GraphMapStreamState::Func(func, sender_out) => {
@@ -240,18 +242,19 @@ where
             }
             _ => panic!(),
         }
-        self.receiver_stream.setup(graph_state);
+    self.receiver_stream.setup(graph_state)?;
+    Ok(())
     }
-
-    fn stop(&mut self, state: &mut GraphState) {
+    fn stop(&mut self, state: &mut GraphState) -> anyhow::Result<()> {
         let res = self.sender.get_mut().unwrap().close();
         if res.is_err() {
             state.terminate(res.map_err(|e| anyhow!(e)));
         }
+        Ok(())
     }
 
-    fn teardown(&mut self, graph_state: &mut GraphState) {
-        self.receiver_stream.teardown(graph_state);
+    fn teardown(&mut self, graph_state: &mut GraphState) -> anyhow::Result<()> {
+        self.receiver_stream.teardown(graph_state)?;
         let state = mem::take(&mut self.state);
         match state {
             GraphMapStreamState::Handle(handle) => {
@@ -260,6 +263,7 @@ where
             }
             _ => panic!(),
         }
+        Ok(())
     }
 }
 

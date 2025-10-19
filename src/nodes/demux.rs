@@ -200,7 +200,7 @@ where
     F: Fn(&T) -> (K, DemuxEvent),
     K: Hash + Eq + PartialEq + std::fmt::Debug,
 {
-    fn cycle(&mut self, graph_state: &mut GraphState) -> bool {
+    fn cycle(&mut self, graph_state: &mut GraphState) -> anyhow::Result<bool> {
         self.value = self.source.peek_value();
         let (key, event) = (self.func)(&self.value);
         let entry = match event {
@@ -213,10 +213,10 @@ where
         };
         // mark dirty directly instead of ticking
         graph_state.mark_dirty(graph_index);
-        false
+        Ok(false)
     }
 
-    fn setup(&mut self, graph_state: &mut GraphState) {
+    fn setup(&mut self, graph_state: &mut GraphState) -> anyhow::Result<()> {
         let mut childes = self.children.borrow_mut();
         let mut node_indexes: Vec<_> = childes
             .drain(..)
@@ -240,6 +240,7 @@ where
             !self.index_map.is_empty(),
             "Failed to resolve any children to demux into"
         );
+        Ok(())
     }
 
     fn upstreams(&self) -> UpStreams {
@@ -262,9 +263,9 @@ impl<T> MutableNode for DemuxChild<T>
 where
     T: Element,
 {
-    fn cycle(&mut self, _state: &mut GraphState) -> bool {
+    fn cycle(&mut self, _state: &mut GraphState) -> anyhow::Result<bool> {
         self.value = self.source.peek_value();
-        true
+        Ok(true)
     }
 
     fn upstreams(&self) -> UpStreams {
@@ -353,7 +354,7 @@ where
     K: Hash + Eq + PartialEq + std::fmt::Debug,
     I: IntoIterator<Item = T> + Element,
 {
-    fn cycle(&mut self, graph_state: &mut GraphState) -> bool {
+    fn cycle(&mut self, graph_state: &mut GraphState) -> anyhow::Result<bool> {
         for row in &mut self.value {
             row.clear();
         }
@@ -378,10 +379,9 @@ where
             // mark dirty directly instead of ticking
             graph_state.mark_dirty(graph_index);
         }
-        false
+        Ok(false)
     }
-
-    fn setup(&mut self, graph_state: &mut GraphState) {
+    fn setup(&mut self, graph_state: &mut GraphState) -> anyhow::Result<()> {
         let mut childes = self.children.borrow_mut();
         let mut node_indexes: Vec<_> = childes
             .drain(..)
@@ -405,6 +405,7 @@ where
             !self.index_map.is_empty(),
             "Failed to resolve any children to demux into"
         );
+        Ok(())
     }
 
     fn upstreams(&self) -> UpStreams {
@@ -428,9 +429,9 @@ impl<T> MutableNode for DemuxVecChild<T>
 where
     T: Element,
 {
-    fn cycle(&mut self, _state: &mut GraphState) -> bool {
+    fn cycle(&mut self, _state: &mut GraphState) -> anyhow::Result<bool> {
         self.value = self.source.peek_ref_cell().get(self.index).unwrap().clone();
-        true
+        Ok(true)
     }
 
     fn upstreams(&self) -> UpStreams {

@@ -330,36 +330,28 @@ impl Graph {
     }
 
     pub(crate) fn setup_nodes(&mut self) {
-        self.apply_nodes("setup", |node, state| {
-            node.setup(state);
-        });
+        self.apply_nodes("setup", |node, state| node.setup(state)).unwrap();
     }
 
     pub(crate) fn start_nodes(&mut self) {
-        self.apply_nodes("start", |node, state| {
-            node.start(state);
-        });
+        self.apply_nodes("start", |node, state| node.start(state)).unwrap();
     }
 
     pub(crate) fn stop_nodes(&mut self) {
-        self.apply_nodes("stop", |node, state| {
-            node.stop(state);
-        });
+        self.apply_nodes("stop", |node, state| node.stop(state)).unwrap();
     }
 
     pub(crate) fn teardown_nodes(&mut self) {
-        self.apply_nodes("teardown", |node, state| {
-            node.teardown(state);
-        });
+        self.apply_nodes("teardown", |node, state| node.teardown(state)).unwrap();
     }
 
-    fn apply_nodes(&mut self, desc: &str, func: impl Fn(Rc<dyn Node>, &mut GraphState)) {
+    fn apply_nodes(&mut self, desc: &str, func: impl Fn(Rc<dyn Node>, &mut GraphState) -> anyhow::Result<()>) -> anyhow::Result<()> {
         //println!("*** {:}graph {:} {:}", "   ".repeat(self.state.id), self.state.id, desc);
         let timer = Instant::now();
         for ix in 0..self.state.nodes.len() {
             let node = &self.state.nodes[ix];
             self.state.current_node_index = Some(ix);
-            func(node.node.clone(), &mut self.state);
+            func(node.node.clone(), &mut self.state)?;
             self.state.current_node_index = None;
         }
         debug!(
@@ -370,6 +362,7 @@ impl Graph {
             self.state.nodes.len()
         );
         //println!("*** {:}graph {:} {:} done", "   ".repeat(self.state.id), self.state.id, desc);
+        Ok(())
     }
 
     fn resolve_start_end(
@@ -615,16 +608,20 @@ impl Graph {
         for lyr in 0..self.state.dirty_nodes_by_layer.len() {
             for i in 0..self.state.dirty_nodes_by_layer[lyr].len() {
                 let ix = self.state.dirty_nodes_by_layer[lyr][i];
-                self.cycle_node(ix);
+                if let Err(e) = self.cycle_node(ix) {
+                    // propagate error to state and return early
+                    self.state.result = Some(Err(e));
+                    return;
+                }
             }
         }
         self.reset();
     }
 
-    fn cycle_node(&mut self, index: usize) {
+    fn cycle_node(&mut self, index: usize) -> anyhow::Result<()> {
         let node = &self.state.nodes[index].node;
         self.state.current_node_index = Some(index);
-        let ticked = node.clone().cycle(&mut self.state);
+        let ticked = node.clone().cycle(&mut self.state)?;
         self.state.current_node_index = None;
         //trace!("cycled node [{:02}] Ticked =  {:?} => {:}", index, ticked, node);
         if ticked {
@@ -636,6 +633,7 @@ impl Graph {
                 }
             }
         }
+        Ok(())
     }
 
     fn reset(&mut self) {

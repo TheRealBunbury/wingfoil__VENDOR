@@ -11,14 +11,15 @@ pub struct FinallyNode<T: Element, F: FnOnce(T, &GraphState) + Clone> {
 }
 
 impl<T: Element, F: FnOnce(T, &GraphState) + Clone> MutableNode for FinallyNode<T, F> {
-    fn cycle(&mut self, _state: &mut GraphState) -> bool {
+    fn cycle(&mut self, _state: &mut GraphState) -> anyhow::Result<bool> {
         self.value = self.source.peek_value();
-        true
+        Ok(true)
     }
     fn upstreams(&self) -> UpStreams {
         UpStreams::new(vec![self.source.clone().as_node()], vec![])
     }
-    fn stop(&mut self, state: &mut GraphState) {
-        (self.finally.clone())(self.value.clone(), state)
+    fn stop(&mut self, state: &mut GraphState) -> anyhow::Result<()> {
+        (self.finally.clone())(self.value.clone(), state);
+        Ok(())
     }
 }
