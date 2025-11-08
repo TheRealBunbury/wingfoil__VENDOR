@@ -28,9 +28,12 @@ jobs:
       - name: Install maturin
         run: pip install maturin
 
+      - name: maturin version
+        run: maturin --version
+
       - name: Build wheel
         run: |
-          maturin build --release --strip --manylinux off -o wheelhouse
+          maturin build --verbose --release --strip --manylinux off -o wheelhouse
 
       - name: List built wheels
         run: ls -lh wheelhouse
