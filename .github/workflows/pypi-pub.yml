@@ -77,12 +77,15 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: wingfoil-python/wheelhouse
+          path: wingfoil-python/artifacts
 
-      - name: List artifacts
+      - name: Prepare artifacts
         run: |
-          cd wingfoil-python/wheelhouse
-          ls -al
+          cd wingfoil-python
+          ls -al artifacts
+          mkdir -p wingfoil-python/wheelhouse
+          find artifacts -name "*.whl" -exec cp {} wheelhouse/ \;
+          ls -al wheelhouse
 
       - name: Upload to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1.11.0
