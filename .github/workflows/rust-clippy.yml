@@ -1,13 +1,4 @@
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-# rust-clippy is a tool that runs a bunch of lints to catch common
-# mistakes in your Rust code and help improve your Rust code.
-# More details at https://github.com/rust-lang/rust-clippy
-# and https://rust-lang.github.io/rust-clippy/
-
-name: rust-clippy analyze
+name: rust-lint
 
 on:
   push:
@@ -20,35 +11,46 @@ on:
       - ".github/workflows/**"
 
 jobs:
-  rust-clippy-analyze:
-    name: Run rust-clippy analyzing
+  rust-lint:
+    name: Rust fmt + Clippy
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
-      actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
+      actions: read
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af #@v1
+        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
         with:
           profile: minimal
           toolchain: stable
           components: clippy
           override: true
 
-      - name: Install required cargo
+      - name: Install required cargo tools
         run: cargo install clippy-sarif sarif-fmt
 
-      - name: Run rust-clippy
-        run:
-          cargo clippy
-          --all-features
-          --message-format=json | clippy-sarif | tee rust-clippy-results.sarif | sarif-fmt
-        continue-on-error: true
+      # ✅ Fail workflow if any file needs formatting
+      - name: Run rustfmt (fail if not formatted)
+        run: |
+          cargo fmt --all -- --check
 
+      # ✅ Fail workflow if any clippy lint triggered
+      - name: Run rust-clippy
+        run: |
+          # propagate errors through pipes
+          set -o pipefail
+
+          cargo clippy --all-features --message-format=json \
+            | clippy-sarif \
+            | tee rust-clippy-results.sarif \
+            | sarif-fmt
+
+      # ✅ Upload SARIF to GitHub Code Scanning
       - name: Upload analysis results to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
