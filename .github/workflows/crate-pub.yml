@@ -23,6 +23,9 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Build wingfoil to generate Cargo.lock
+        run: cargo build
+
       - name: Publish wingfoil
         if: ${{ github.event.inputs.crate == 'wingfoil' || github.event.inputs.crate == 'both' }}
         working-directory: wingfoil
