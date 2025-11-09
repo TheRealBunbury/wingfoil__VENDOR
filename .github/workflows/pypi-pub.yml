@@ -21,6 +21,11 @@ jobs:
         python-version: [3.8, 3.9, 3.10, 3.11, 3.12]
 
     steps:
+      - name: Debug matrix
+        run: |
+          echo "OS: ${{ matrix.os }}"
+          echo "Python version: ${{ matrix.python-version }}"
+
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -28,6 +33,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+          check-latest: true
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -38,13 +44,13 @@ jobs:
       - name: Install maturin
         run: pip install maturin
 
-      - name: Build wheel
+      - name: Build wheel and sdist
         run: |
           cd wingfoil-python
           maturin --version
-          maturin build --verbose --release --strip -o wheelhouse
+          maturin build --verbose --release --strip --sdist -o wheelhouse
 
-      - name: List built wheels
+      - name: List built distributions
         run: |
           cd wingfoil-python
           ls -lh wheelhouse
@@ -58,7 +64,6 @@ jobs:
           else
             echo "REPO_URL=https://test.pypi.org/legacy/" >> $GITHUB_ENV
             echo "TOKEN_NAME=TEST_PYPI_API_TOKEN" >> $GITHUB_ENV
-          fi
 
       - name: Upload to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
