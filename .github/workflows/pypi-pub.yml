@@ -50,7 +50,7 @@ jobs:
           maturin build --verbose --release --strip --sdist -o wheelhouse
 
       - name: Upload wheels as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wheelhouse-${{ matrix.os }}-${{ matrix.python-version }}
           path: wingfoil-python/wheelhouse
@@ -73,7 +73,7 @@ jobs:
             echo "TOKEN_NAME=TEST_PYPI_API_TOKEN" >> $GITHUB_ENV
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: wingfoil-python/wheelhouse
 
