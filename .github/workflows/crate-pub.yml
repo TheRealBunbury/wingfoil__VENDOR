@@ -38,14 +38,9 @@ jobs:
           echo "Replacing path dependency with version $WINGFOIL_VERSION"
           sed -i "s|path = \"../wingfoil\"|version = \"$WINGFOIL_VERSION\"|" Cargo.toml
 
-      # Build wingfoil-python to generate Cargo.lock
-      - name: Build wingfoil-python
-        working-directory: wingfoil-python
-        run: cargo build
-
       # Publish wingfoil-python
       - name: Publish wingfoil-python
         working-directory: wingfoil-python
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_API_TOKEN }}
-        run: cargo publish --registry crates-io
+        run: cargo publish --registry crates-io --allow-dirty
