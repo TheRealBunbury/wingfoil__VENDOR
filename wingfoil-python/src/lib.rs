@@ -2,11 +2,15 @@ use anyhow::anyhow;
 use pyo3::exceptions::PyException;
 use std::time::SystemTime;
 
-use ::wingfoil::{NanoTime, Node, NodeOperators, RunFor, RunMode, Stream, StreamOperators};
+use ::wingfoil::{
+    GraphState, IntoNode, IntoStream, MutableNode, NanoTime, Node, NodeOperators, RunFor, RunMode,
+    Stream, StreamOperators, StreamPeekRef, UpStreams,
+};
 
 use pyo3::conversion::IntoPyObjectExt;
 use pyo3::prelude::*;
 
+use lazy_static::lazy_static;
 use std::rc::Rc;
 use std::time::Duration;
 use std::time::UNIX_EPOCH;
@@ -27,7 +31,7 @@ impl PyNode {
         let count = self.0.count().map(move |x| {
             Python::attach(|py| {
                 let x: Py<PyAny> = x.into_py_any(py).unwrap();
-                PyElement(x)
+                PyElement(Some(x))
             })
         });
         Ok(PyStream(count))
@@ -41,18 +45,23 @@ fn ticker(seconds: f64) -> PyResult<PyNode> {
     Ok(node)
 }
 
-struct PyElement(Py<PyAny>);
+struct PyElement(Option<Py<PyAny>>);
 
 impl Default for PyElement {
     fn default() -> Self {
-        Python::attach(|py| PyElement(py.None()))
+        Python::attach(|py| PyElement(Some(py.None())))
     }
 }
 
 impl std::fmt::Debug for PyElement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Python::attach(|py| {
-            let result = self.0.call_method0(py, "__str__").unwrap();
+            let result = self
+                .0
+                .as_ref()
+                .unwrap()
+                .call_method0(py, "__str__")
+                .unwrap();
             write!(f, "{}", result.extract::<String>(py).unwrap())
         })
     }
@@ -60,7 +69,10 @@ impl std::fmt::Debug for PyElement {
 
 impl Clone for PyElement {
     fn clone(&self) -> Self {
-        Python::attach(|py| PyElement(self.0.clone_ref(py)))
+        match &self.0 {
+            Some(inner) => Python::attach(|py| PyElement(Some(inner.clone_ref(py)))),
+            None => PyElement(None),
+        }
     }
 }
 
@@ -70,6 +82,13 @@ struct PyStream(Rc<dyn Stream<PyElement>>);
 
 #[pymethods]
 impl PyStream {
+    #[new]
+    fn new(inner: Py<PyAny>) -> Self {
+        let stream = PyProxyStream(inner);
+        let stream = stream.into_stream();
+        Self(stream)
+    }
+
     #[pyo3(signature = (realtime=true, start=None, duration=None, cycles=None))]
     fn run(
         &self,
@@ -86,7 +105,7 @@ impl PyStream {
     }
 
     fn peek_value(&self) -> Py<PyAny> {
-        self.0.peek_value().0
+        self.0.peek_value().0.unwrap()
     }
 
     fn logged(&self, label: String) -> PyStream {
@@ -97,7 +116,7 @@ impl PyStream {
         let stream = self.0.map(move |x| {
             Python::attach(|py| {
                 let res = func.call1(py, (x.0,)).unwrap();
-                PyElement(res)
+                PyElement(Some(res))
             })
         });
         Ok(PyStream(stream))
@@ -191,11 +210,86 @@ fn to_nano_time(py: Python<'_>, obj: Py<PyAny>) -> anyhow::Result<NanoTime> {
     }
 }
 
+use derive_more::Display;
+
+/// This is used as inner class of python coded base class Stream
+#[derive(Display)]
+#[pyclass(subclass, unsendable)]
+struct PyProxyStream(Py<PyAny>);
+
+#[pymethods]
+impl PyProxyStream {
+    /// Constructor taking a Python object to wrap
+    #[new]
+    fn new(obj: Py<PyAny>) -> Self {
+        PyProxyStream(obj)
+    }
+}
+
+impl Clone for PyProxyStream {
+    fn clone(&self) -> Self {
+        Python::attach(|py| Self(self.0.clone_ref(py)))
+    }
+}
+
+impl MutableNode for PyProxyStream {
+    fn cycle(&mut self, _state: &mut GraphState) -> bool {
+        Python::attach(|py| {
+            let this = self.0.bind(py);
+            let res = this.call_method0("cycle").unwrap();
+            res.extract::<bool>().unwrap()
+        })
+    }
+
+    fn upstreams(&self) -> UpStreams {
+        let ups = Python::attach(|py| {
+            let this = self.0.bind(py);
+            let res = this.call_method0("upstreams").unwrap();
+            let res = res.extract::<Vec<Py<PyAny>>>().unwrap();
+            res.iter()
+                .map(|obj| {
+                    let bound = obj.bind(py);
+                    if let Ok(stream) = bound.extract::<PyStream>() {
+                        stream.0.as_node()
+                    } else if let Ok(stream) = bound.extract::<PyProxyStream>() {
+                        stream.into_node()
+                    } else {
+                        panic!("Unexpected upstream type");
+                    }
+                })
+                .collect::<Vec<_>>()
+        });
+        UpStreams::new(ups, vec![])
+    }
+}
+
+lazy_static! {
+    static ref DUMMY_PY_ELEMENT: PyElement = PyElement(None);
+}
+
+impl StreamPeekRef<PyElement> for PyProxyStream {
+    // This is a bit hacky - we supply dummy value for peek ref
+    // but resolve it to real value in from_cell_ref.
+    // Currently peek_ref is only used directly in demux.
+
+    fn peek_ref(&self) -> &PyElement {
+        &DUMMY_PY_ELEMENT
+    }
+
+    fn clone_from_cell_ref(&self, _cell_ref: std::cell::Ref<'_, PyElement>) -> PyElement {
+        Python::attach(|py| {
+            let res = self.0.call_method0(py, "peek").unwrap();
+            PyElement(Some(res))
+        })
+    }
+}
+
 #[pymodule]
 fn _wingfoil(module: &Bound<'_, PyModule>) -> PyResult<()> {
     _ = env_logger::try_init();
     module.add_function(wrap_pyfunction!(ticker, module)?)?;
     module.add_class::<PyNode>()?;
+    module.add_class::<PyStream>()?;
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
