@@ -11,7 +11,7 @@ build:
 python:
   install:
     - method: pip
-      path: .  wingfoil-python 
+      path: wingfoil-python
     - requirements: wingfoil-python/docs/requirements.txt
 
 # Sphinx configuration
