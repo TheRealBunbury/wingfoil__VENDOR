@@ -20,5 +20,5 @@ sphinx:
 
 # Optionally specify the docs folder and branch
 formats:
-  - html
+  - htmlzip
   - pdf
