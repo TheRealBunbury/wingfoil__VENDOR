@@ -16,7 +16,7 @@ python:
 
 # Sphinx configuration
 sphinx:
-  configuration: docs/conf.py
+  configuration: wingfoil-python/docs/conf.py
 
 # Optionally specify the docs folder and branch
 formats:
