@@ -47,9 +47,8 @@ fn constant(val: Py<PyAny>) -> PyStream {
 /// trading and real-time AI systems
 #[pymodule]
 fn _wingfoil(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info")
-    ).init();
+    let env = env_logger::Env::default().default_filter_or("info");
+    env_logger::Builder::from_env(env).init();
     module.add_function(wrap_pyfunction!(ticker, module)?)?;
     module.add_function(wrap_pyfunction!(constant, module)?)?;
     module.add_class::<PyNode>()?;
