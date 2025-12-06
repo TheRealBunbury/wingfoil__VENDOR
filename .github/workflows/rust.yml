@@ -29,13 +29,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
           toolchain: stable
-          components: clippy
           override: true
-          target: nightly
 
       - name: Install required cargo tools
         run: cargo install clippy-sarif sarif-fmt grcov
